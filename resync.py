@@ -787,12 +787,21 @@ def cleanup_orphaned():
 def cleanup_duplicates():
     """detect, select, remove duplicates. If there are notes, merge them."""
 
-    print("computing md5sum of each file on the reMarkable device... it could take some time.")
-    results = ssh(f'md5sum {xochitl_dir}/*.pdf').split("\n")
+    print("computing md5sum of each file on the reMarkable device... it takes some time in the first run.")
+    results = ssh((f"for f in {xochitl_dir}/*.pdf ; do "
+                   "if [ ! -e $f.md5sum ] ; then "
+                   "md5sum $f > $f.md5sum ;"
+                   "fi ;"
+                   "done ;"
+                   f"cat {xochitl_dir}/*.md5sum")).split("\n")
     database = dict()
     duplicates = set()
     for line in results:
-        md5, filename = line.split()
+        try:
+            md5, filename = line.split()
+        except Exception as e:
+            print(line)
+            raise e
         u = os.path.basename(os.path.splitext(filename)[0])
         if md5 not in database:
             database[md5] = []
