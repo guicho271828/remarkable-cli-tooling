@@ -18,6 +18,14 @@ and should work under any unixoid operating system, such as Linux, BSD or MacOS/
 Where reMarkable-specific internals have changed, supported version numbers are tagged to specific commits, to make sure to mark version-specific verified software versions.
 The latest version of this repository is typically tailored to the latest version of the reMarkable software.
 
+*Additional Note*
+
+This fork was extended from https://github.com/cherti/remarkable-cli-tooling to
+support synchronizing a large number of documents (> 1k pdfs) stored in the device.
+The original form uses a SCP for individual file, which is too slow for convenient uploading.
+I also added a duplicate-detection feature so that a simple renaming does not create a duplicate file.
+
+
 ## Summary
 
   * `resync.py`: push, pull, backup, clean documents on the reMarkable.
