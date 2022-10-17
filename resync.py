@@ -209,7 +209,7 @@ def retrieve_metadata():
             metadata_by_parent[metadata["parent"]][uuid] = metadata
 
             if (metadata["visibleName"], metadata["parent"]) in metadata_by_name_and_parent:
-                raise FileCollision(f'Same file name {metadata["visibleName"]} under the same parent, not supported! Remove the file!')
+                raise FileCollision(f'Same file name "{metadata["visibleName"]}" under the same parent, not supported! Remove either file! {fullpath(metadata)}')
             metadata_by_name_and_parent[(metadata["visibleName"], metadata["parent"])] = (uuid, metadata)
     pass
 
@@ -749,7 +749,7 @@ def pull_from_remarkable():
 
 
 def cleanup_deleted():
-    """remove trash files"""
+    print("removing trash files")
 
     deleted_uuids = []
     limit = 10
@@ -769,7 +769,7 @@ def cleanup_deleted():
 
 
 def cleanup_orphaned():
-    """remove pdfs that lack metadata"""
+    print("removing files without metadata")
     files = ssh(f"ls -1 {xochitl_dir} | while read f ; do stem=${{f%%.*}} ; if ! [ -e {xochitl_dir}/$stem.metadata ] ; then echo $f ; fi ; done")
     l = len(files.split("\n"))
     if l == 1:
@@ -787,7 +787,7 @@ def cleanup_orphaned():
 def cleanup_duplicates():
     """detect, select, remove duplicates. If there are notes, merge them."""
 
-    print("computing md5sum on remarkable device... it could take some time.")
+    print("computing md5sum of each file on the reMarkable device... it could take some time.")
     results = ssh(f'md5sum {xochitl_dir}/*.pdf').split("\n")
     database = dict()
     duplicates = set()
@@ -800,45 +800,87 @@ def cleanup_duplicates():
         if len(database[md5])>=2:
             duplicates.add(md5)
 
+
     deleted_uuids = []
-    for md5 in duplicates:
-        print(f"found {len(database[md5])} duplicates for md5sum {md5}:")
+    for j, md5 in enumerate(duplicates):
+        print(f"({j:3d}/{len(duplicates)}) found {len(database[md5])} duplicates for md5sum {md5}:")
         try:
-            for i, u in enumerate(database[md5]):
+            tmp = []
+
+            for u in database[md5]:
                 metadata = get_metadata_by_uuid(u)
-                lastmodified = datetime.datetime.fromtimestamp(int(metadata["lastModified"])//1000)
-                print(f"duplicate {i}, modified {lastmodified}, {fullpath(metadata)}:")
-                # print(json.dumps(metadata,indent=2))
+                if metadata is None:
+                    print(f"weird, the metadata for {u} does not exist, skipping (in: {database[md5]})")
+                    continue
+                lastmodified = metadata["lastModified"]
+                try:
+                    lastmodified = int(lastmodified)
+                except ValueError as e:
+                    print(f"error while reading the last modified date of file {fullpath(metadata)}")
+                    raise e
+                tmp.append((lastmodified, u, metadata))
+
+            tmp = sorted(tmp,reverse=True)
+
+            for i, (lastmodified, u, metadata) in enumerate(tmp):
+                lastmodified = datetime.datetime.fromtimestamp(lastmodified//1000)
+                if i == 0:
+                    prefix="(* newest)"
+                else:
+                    prefix="          "
+                print(f"{prefix} {i}, uuid {u}, modified {lastmodified}, {fullpath(metadata)}")
+
         except KeyError:
-            print("it should not happen...")
+            print("this should not happen...")
             continue
 
-        try:
-            i = int(input("which one to keep? [number]: "))
-        except ValueError:
-            print("input parsing error. ignore this duplicate for now.")
+        while True:
+            if len(tmp) == 1:
+                print("Due to the anomaly, there is only one candidate which I keep.")
+                i = 0
+                break
+            s = input("Hit ENTER for default(*), select a number, or hit n to skip this file, or hit N to stop: ")
+            if s == "":
+                i = 0
+                break
+            elif s == "n":
+                i = -1
+                break
+            elif s == "N":
+                i = -2
+                break
+            else:
+                try:
+                    i = int(s)
+                except ValueError:
+                    print(f"Input parsing error. ('{s}') Try again")
+                    continue
+                if 0 <= i < len(tmp):
+                    break
+                else:
+                    print(f"enter a number from 0 to {len(tmp)-1}.")
+                    continue
+
+        if i == -1:
+            print(f"skipping this file.")
             continue
+        if i == -2:
+            print(f"cleanup stopped.")
+            break
 
-        try:
-            keep = database[md5][i]
-        except KeyError:
-            print("you must have an out of range number")
-            continue
-        rest = set(database[md5]) - {keep}
-        deleted_uuids.extend(rest)
+        _, keep, _ = tmp[i]
 
-    for u in deleted_uuids:
-        remove_uuid(u)
+        for _, u, _ in tmp:
+            if u == keep:
+                continue
+            remove_uuid(u)
+            ssh(f"rm -rv {xochitl_dir}/{u}*", dry=args.dryrun)
+            deleted_uuids.append(u)
+        print(f'Removed {len(tmp)-1} duplicates.')
 
-    if len(deleted_uuids) == 0:
-        print('No empty directories found.')
-        return False
-    else:
-        if ask(f'Clean up {len(deleted_uuids)} duplicates?'):
-            ssh(f"rm -r {xochitl_dir}/{{{','.join(deleted_uuids)}}}*", dry=args.dryrun)
-            return True
-        else:
-            return False
+
+    print(f'Removed {len(deleted_uuids)} duplicates in total.')
+    return len(deleted_uuids) > 0
 
 
 def cleanup_emptydir():
