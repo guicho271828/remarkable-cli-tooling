@@ -91,6 +91,7 @@ elif args.mode == '-':
 try:
     # verify host is a valid IP address string
     _ = ipaddress.ip_address(args.host)
+    print(f"Assuming {args.host} is an ip address")
     args.host = "root@"+args.host
 except ValueError as e:
     print(f"Assuming {args.host} is a host in SSH config")
