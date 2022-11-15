@@ -98,13 +98,24 @@ except ValueError as e:
     pass
 
 
-ssh_command = f'ssh -o PubkeyAcceptedKeyTypes=+ssh-rsa -o HostKeyAlgorithms=+ssh-rsa -S {ssh_socketfile}'
+ssh_command = " ".join(
+    ["ssh",
+     "-o PubkeyAcceptedKeyTypes=+ssh-rsa",
+     "-o HostKeyAlgorithms=+ssh-rsa",
+     "-o UserKnownHostsFile=/dev/null",
+     "-o StrictHostKeyChecking=no",
+     "-o ConnectTimeout=1",
+     f"-S {ssh_socketfile}",])
 
-def ssh(arg,dry=False):
+
+def ssh(arg,dry=False,status=False):
     if args.verbosity >= 1:
         print(f'{ssh_command} {args.host} \'{arg}\'')
     if not dry:
-        return subprocess.getoutput(f'{ssh_command} {args.host} \'{arg}\'')
+        if status:
+            return subprocess.getstatusoutput(f'{ssh_command} {args.host} \'{arg}\'')
+        else:
+            return subprocess.getoutput(f'{ssh_command} {args.host} \'{arg}\'')
 
 
 class FileCollision(Exception):
@@ -929,13 +940,14 @@ def cleanup_emptydir():
 
 ssh_connection = None
 try:
-    ssh_connection = subprocess.Popen(f'{ssh_command} {args.host} -o ConnectTimeout=1 -M -N -q ', shell=True)
+
+    ssh_connection = subprocess.Popen(f'{ssh_command} {args.host} -M -N -q ', shell=True)
 
     # quickly check if we actually have a functional ssh connection (might not be the case right after an update)
-    checkmsg = ssh("/bin/true")
-    if checkmsg != "":
+    status, checkmsg = ssh("/bin/true",status=True)
+    if status != 0:
         print("ssh connection does not work, verify that you can manually ssh into your reMarkable. ssh itself commented the situation with:")
-        print(checkmsg)
+        print("msg:",checkmsg)
         sys.exit(255)
 
     retrieve_metadata()
