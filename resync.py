@@ -604,7 +604,11 @@ def construct_node_tree_from_disk(basepath, parent=None):
             child = construct_node_tree_from_disk(path/f, parent=node)
             if child is not None:
                 node.add_child(child)
-        return node
+        if not node.children:
+            print(f"empty directory, ignored: {path}")
+            return None
+        else:
+            return node
 
     elif path.is_file() and path.suffix.lower() in ['.pdf', '.epub']:
         node = Document(path, parent=parent)
