@@ -74,7 +74,7 @@ parser.add_argument('mode', type=str, choices=["push","pull","backup","+","-","c
                           "\n  clean:   performs a number of cleaning operations."
                           "\n           * clear the files in Trash"
                           "\n           * remove the orphaned files"
-                          "\n           * remove empty directory"
+                          "\n           * remove empty directories"
                           "\n           * detect/select/remove duplicates"
                           "\n           We ask before performing each step unless -y|--yes."))
 
