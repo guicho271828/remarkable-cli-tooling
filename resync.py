@@ -206,7 +206,8 @@ def retrieve_metadata():
     with io.StringIO(ssh(f'cat {xochitl_dir}/*.metadata')) as f:
         for path, metadata in tqdm.tqdm(zip(paths, stream_read_json(f)), total=len(paths)):
             path = pathlib.Path(path)
-            if metadata['deleted'] or metadata['parent'] == 'trash':
+            if ('deleted' in metadata and metadata['deleted']) or \
+               ('parent' in metadata and metadata['parent'] == 'trash'):
                 continue
             # metadata["uuid"] = path.stem
             uuid = path.stem
